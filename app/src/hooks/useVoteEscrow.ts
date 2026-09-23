@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { VoteEscrowClient, VoteEscrowLock, VoteEscrowStats } from "@nebgov/sdk";
+import { readGovernorConfig } from "@/lib/nebgov-env";
 
 export interface UseVoteEscrowResult {
   lock: VoteEscrowLock | null;
@@ -31,22 +32,19 @@ export function useVoteEscrow(address: string | undefined): UseVoteEscrowResult 
       setError(null);
 
       try {
-        const voteEscrowAddress = process.env.NEXT_PUBLIC_VOTE_ESCROW_ADDRESS;
-        const governorAddress = process.env.NEXT_PUBLIC_GOVERNOR_ADDRESS;
-        const timelockAddress = process.env.NEXT_PUBLIC_TIMELOCK_ADDRESS;
-        const votesAddress = process.env.NEXT_PUBLIC_VOTES_ADDRESS;
+        const config = readGovernorConfig();
+        if (!config || !config.governorAddress) {
+          throw new Error("Governor config not available");
+        }
 
+        const voteEscrowAddress = process.env.NEXT_PUBLIC_VOTE_ESCROW_ADDRESS;
         if (!voteEscrowAddress) {
           throw new Error("NEXT_PUBLIC_VOTE_ESCROW_ADDRESS not configured");
         }
 
         const client = new VoteEscrowClient({
-          governorAddress: governorAddress || "",
-          timelockAddress: timelockAddress || "",
-          votesAddress: votesAddress || "",
+          ...config,
           voteEscrowAddress,
-          network: (process.env.NEXT_PUBLIC_NETWORK || "testnet") as any,
-          rpcUrl: process.env.NEXT_PUBLIC_RPC_URL,
           simulationAccount: process.env.NEXT_PUBLIC_SIMULATION_ACCOUNT,
         });
 
