@@ -4,13 +4,21 @@ import { useState } from "react";
 import { useWallet } from "@/lib/wallet-context";
 import { useVoteEscrow } from "@/hooks/useVoteEscrow";
 import { LockCard } from "@/components/LockCard";
+import { useGovernorConfig } from "@/hooks/useGovernorConfig";
+import { parseDecimalToStroops } from "@/lib/parseDecimalToStroops";
+import { toast } from "react-toastify";
 
 export default function VoteEscrowPage() {
-  const { publicKey } = useWallet();
+  const { publicKey: pk, connect, signTransaction } = useWallet();
   const { lock, votingPower, stats, loading, error } = useVoteEscrow(publicKey);
 
   const [amount, setAmount] = useState("");
   const [duration, setDuration] = useState("");
+  const [errors, setErrors] = useState<{ amount?: string; duration?: string }>({});
+  const { divisor } = useGovernorConfig();
+  const MIN_LOCK = Number(process.env.NEXT_PUBLIC_MIN_LOCK_DURATION || 0);
+  const MAX_LOCK = Number(process.env.NEXT_PUBLIC_MAX_LOCK_DURATION || 99999999);
+  const [busy, setBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<"create" | "manage">("create");
 
   return (
@@ -61,12 +69,17 @@ export default function VoteEscrowPage() {
                     Amount
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
+                    onBlur={() => {
+                      const parsed = parseDecimalToStroops(amount, divisor);
+                      setErrors((s) => ({ ...s, amount: parsed instanceof Error ? parsed.message : undefined }));
+                    }}
                     placeholder="Enter amount to lock"
                     className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-900 placeholder-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-50 dark:placeholder-gray-400"
                   />
+                  {errors.amount && <p className="mt-1 text-sm text-red-600">{errors.amount}</p>}
                 </div>
 
                 <div>
@@ -76,10 +89,19 @@ export default function VoteEscrowPage() {
                   <input
                     type="number"
                     value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
+                    onChange={(e) => {
+                      setDuration(e.target.value);
+                      const n = Number(e.target.value || 0);
+                      let msg: string | undefined;
+                      if (!Number.isFinite(n) || n <= 0) msg = "Duration must be a positive integer";
+                      else if (n < MIN_LOCK) msg = `Minimum duration is ${MIN_LOCK} ledgers`;
+                      else if (n > MAX_LOCK) msg = `Maximum duration is ${MAX_LOCK} ledgers`;
+                      setErrors((s) => ({ ...s, duration: msg }));
+                    }}
                     placeholder="Enter lock duration in ledgers"
                     className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-900 placeholder-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-50 dark:placeholder-gray-400"
                   />
+                  {errors.duration && <p className="mt-1 text-sm text-red-600">{errors.duration}</p>}
                 </div>
 
                 {amount && duration && (
@@ -105,19 +127,29 @@ export default function VoteEscrowPage() {
                       toast.error("Vote escrow is not configured for this deployment.");
                       return;
                     }
+
+                    const parsed = parseDecimalToStroops(amount, divisor);
+                    if (parsed instanceof Error) {
+                      setErrors((s) => ({ ...s, amount: parsed.message }));
+                      return;
+                    }
+                    const dur = Number(duration || 0);
+                    if (!Number.isInteger(dur) || dur <= 0) {
+                      setErrors((s) => ({ ...s, duration: "Invalid duration" }));
+                      return;
+                    }
+                    if (errors.amount || errors.duration) return;
+
                     setBusy(true);
                     try {
-                      const hash = await client.createLockWithSign(
-                        pk,
-                        BigInt(amount || "0"),
-                        Number(duration || 0),
-                        signTransaction,
-                      );
+                      const hash = await client.createLockWithSign(pk, parsed, dur, signTransaction);
                       toast.success(
                         <span>
                           Lock created — <a className="underline" href={`https://explorer.stellar.org/tx/${hash}`}>view</a>
                         </span>,
                       );
+                      setAmount("");
+                      setDuration("");
                     } catch (e: unknown) {
                       toast.error(e instanceof Error ? e.message : "Create lock failed");
                     } finally {
