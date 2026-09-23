@@ -59,7 +59,7 @@ export function useVoteEscrow(address: string | undefined): UseVoteEscrowResult 
         if (!cancelled) {
           setLock(lockData);
           setVotingPower(votingPowerData);
-          setStats(statsData);
+          setStats(statsData ?? null);
         }
       } catch (err) {
         if (!cancelled) {
@@ -80,9 +80,4 @@ export function useVoteEscrow(address: string | undefined): UseVoteEscrowResult 
   }, [address]);
 
   return { lock, votingPower, stats, loading, error };
-  }, [address, refetchToken]);
-
-  const refetch = useCallback(() => setRefetchToken((t) => t + 1), []);
-
-  return { lock, votingPower, stats, loading, error, refetch };
 }
