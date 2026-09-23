@@ -1,8 +1,0 @@
-/Users/macbook/dev/drips/nebgov/./target_local/debug/deps/sorogov_co_sponsorship-27c82b05b18a61a5.d: contracts/co-sponsorship/src/lib.rs contracts/co-sponsorship/src/error.rs contracts/co-sponsorship/src/events.rs contracts/co-sponsorship/src/tests.rs
-
-/Users/macbook/dev/drips/nebgov/./target_local/debug/deps/libsorogov_co_sponsorship-27c82b05b18a61a5.rmeta: contracts/co-sponsorship/src/lib.rs contracts/co-sponsorship/src/error.rs contracts/co-sponsorship/src/events.rs contracts/co-sponsorship/src/tests.rs
-
-contracts/co-sponsorship/src/lib.rs:
-contracts/co-sponsorship/src/error.rs:
-contracts/co-sponsorship/src/events.rs:
-contracts/co-sponsorship/src/tests.rs:
