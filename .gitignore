@@ -28,3 +28,6 @@ Thumbs.db
 test_snapshots/
 tools/sim/reports/*.json
 .opencode
+
+# Local build artifacts
+/target_local/
