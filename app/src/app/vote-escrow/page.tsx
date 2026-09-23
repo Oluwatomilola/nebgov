@@ -1,20 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import toast from "react-hot-toast";
 import { useWallet } from "@/lib/wallet-context";
-import { buildVoteEscrowClient } from "@/hooks/useVoteEscrow";
 import { useVoteEscrow } from "@/hooks/useVoteEscrow";
 import { LockCard } from "@/components/LockCard";
 
 export default function VoteEscrowPage() {
-  const { publicKey: pk, signTransaction, connect } = useWallet();
-  const { lock, votingPower, stats, loading, error } = useVoteEscrow(pk);
+  const { publicKey } = useWallet();
+  const { lock, votingPower, stats, loading, error } = useVoteEscrow(publicKey);
 
   const [amount, setAmount] = useState("");
   const [duration, setDuration] = useState("");
   const [activeTab, setActiveTab] = useState<"create" | "manage">("create");
-  const [busy, setBusy] = useState(false);
 
   return (
     <div className="space-y-8 py-12">

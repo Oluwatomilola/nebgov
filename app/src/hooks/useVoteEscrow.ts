@@ -80,4 +80,9 @@ export function useVoteEscrow(address: string | undefined): UseVoteEscrowResult 
   }, [address]);
 
   return { lock, votingPower, stats, loading, error };
+  }, [address, refetchToken]);
+
+  const refetch = useCallback(() => setRefetchToken((t) => t + 1), []);
+
+  return { lock, votingPower, stats, loading, error, refetch };
 }

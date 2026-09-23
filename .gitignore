@@ -9,6 +9,9 @@ dist/
 .next/
 out/
 
+# Test/coverage output
+coverage/
+
 # Environment
 .env
 .env.local
@@ -31,3 +34,12 @@ tools/sim/reports/*.json
 
 # Local build artifacts
 /target_local/
+.kilo/
+.kilocode/
+.opencode
+
+# Generated test output
+# Soroban writes these on every `cargo test` run; they are build output,
+# regenerated locally and never read by the build or CI.
+test_snapshots/
+tools/sim/reports/*.json
