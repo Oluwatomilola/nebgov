@@ -1,17 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import toast from "react-hot-toast";
 import { useWallet } from "@/lib/wallet-context";
+import { buildVoteEscrowClient } from "@/hooks/useVoteEscrow";
 import { useVoteEscrow } from "@/hooks/useVoteEscrow";
 import { LockCard } from "@/components/LockCard";
 
 export default function VoteEscrowPage() {
-  const { publicKey } = useWallet();
-  const { lock, votingPower, stats, loading, error } = useVoteEscrow(publicKey);
+  const { publicKey: pk, signTransaction, connect } = useWallet();
+  const { lock, votingPower, stats, loading, error } = useVoteEscrow(pk);
 
   const [amount, setAmount] = useState("");
   const [duration, setDuration] = useState("");
   const [activeTab, setActiveTab] = useState<"create" | "manage">("create");
+  const [busy, setBusy] = useState(false);
 
   return (
     <div className="space-y-8 py-12">
@@ -94,8 +97,40 @@ export default function VoteEscrowPage() {
                   </div>
                 )}
 
-                <button className="w-full rounded-lg bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700">
-                  Create Lock
+                <button
+                  onClick={async () => {
+                    if (!pk) {
+                      await connect();
+                      return;
+                    }
+                    const client = buildVoteEscrowClient();
+                    if (!client) {
+                      toast.error("Vote escrow is not configured for this deployment.");
+                      return;
+                    }
+                    setBusy(true);
+                    try {
+                      const hash = await client.createLockWithSign(
+                        pk,
+                        BigInt(amount || "0"),
+                        Number(duration || 0),
+                        signTransaction,
+                      );
+                      toast.success(
+                        <span>
+                          Lock created — <a className="underline" href={`https://explorer.stellar.org/tx/${hash}`}>view</a>
+                        </span>,
+                      );
+                    } catch (e: unknown) {
+                      toast.error(e instanceof Error ? e.message : "Create lock failed");
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                  disabled={busy}
+                  className="w-full rounded-lg bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {busy ? "Creating…" : "Create Lock"}
                 </button>
               </div>
             )}
@@ -107,14 +142,102 @@ export default function VoteEscrowPage() {
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       Manage your existing lock below
                     </p>
-                    <button className="w-full rounded-lg bg-green-600 px-4 py-2 font-medium text-white transition-colors hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700">
-                      Increase Amount
+                    <button
+                      onClick={async () => {
+                        if (!pk) {
+                          await connect();
+                          return;
+                        }
+                        const client = buildVoteEscrowClient();
+                        if (!client) {
+                          toast.error("Vote escrow is not configured for this deployment.");
+                          return;
+                        }
+                        setBusy(true);
+                        try {
+                          const hash = await client.increaseLockAmountWithSign(
+                            pk,
+                            BigInt(amount || "0"),
+                            signTransaction,
+                          );
+                          toast.success(
+                            <span>
+                              Increased — <a className="underline" href={`https://explorer.stellar.org/tx/${hash}`}>view</a>
+                            </span>,
+                          );
+                        } catch (e: unknown) {
+                          toast.error(e instanceof Error ? e.message : "Increase failed");
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                      disabled={busy}
+                      className="w-full rounded-lg bg-green-600 px-4 py-2 font-medium text-white transition-colors hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700 disabled:opacity-50"
+                    >
+                      {busy ? "Processing…" : "Increase Amount"}
                     </button>
-                    <button className="w-full rounded-lg bg-purple-600 px-4 py-2 font-medium text-white transition-colors hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-700">
-                      Extend Lock
+
+                    <button
+                      onClick={async () => {
+                        if (!pk) {
+                          await connect();
+                          return;
+                        }
+                        const client = buildVoteEscrowClient();
+                        if (!client) {
+                          toast.error("Vote escrow is not configured for this deployment.");
+                          return;
+                        }
+                        setBusy(true);
+                        try {
+                          const newEnd = Number(duration || 0);
+                          const hash = await client.extendLockWithSign(pk, newEnd, signTransaction);
+                          toast.success(
+                            <span>
+                              Extended — <a className="underline" href={`https://explorer.stellar.org/tx/${hash}`}>view</a>
+                            </span>,
+                          );
+                        } catch (e: unknown) {
+                          toast.error(e instanceof Error ? e.message : "Extend failed");
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                      disabled={busy}
+                      className="w-full rounded-lg bg-purple-600 px-4 py-2 font-medium text-white transition-colors hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-700 disabled:opacity-50"
+                    >
+                      {busy ? "Processing…" : "Extend Lock"}
                     </button>
-                    <button className="w-full rounded-lg bg-orange-600 px-4 py-2 font-medium text-white transition-colors hover:bg-orange-700 dark:bg-orange-600 dark:hover:bg-orange-700">
-                      Withdraw
+
+                    <button
+                      onClick={async () => {
+                        if (!pk) {
+                          await connect();
+                          return;
+                        }
+                        const client = buildVoteEscrowClient();
+                        if (!client) {
+                          toast.error("Vote escrow is not configured for this deployment.");
+                          return;
+                        }
+                        setBusy(true);
+                        try {
+                          const hash = await client.withdrawWithSign(pk, signTransaction);
+                          toast.success(
+                            <span>
+                              Withdrawn — <a className="underline" href={`https://explorer.stellar.org/tx/${hash}`}>view</a>
+                            </span>,
+                          );
+                        } catch (e: unknown) {
+                          toast.error(e instanceof Error ? e.message : "Withdraw failed");
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                      disabled={busy}
+                      className="w-full rounded-lg bg-orange-600 px-4 py-2 font-medium text-white transition-colors hover:bg-orange-700 dark:bg-orange-600 dark:hover:bg-orange-700 disabled:opacity-50"
+                    >
+                      {busy ? "Processing…" : "Withdraw"}
                     </button>
                   </>
                 ) : (
