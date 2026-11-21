@@ -1569,6 +1569,82 @@ export function createApp(server: SorobanRpc.Server): express.Application {
   );
 
   app.get(
+    "/recurring-streams",
+    async (req: Request, res: Response): Promise<void> => {
+      const pagination = parsePagination(
+        req.query.limit,
+        req.query.offset,
+        20,
+        100,
+      );
+      if (!pagination) {
+        res.status(400).json({ error: "Invalid pagination parameters" });
+        return;
+      }
+      const { limit, offset } = pagination;
+      try {
+        const result = await pool.query(
+          `SELECT * FROM recurring_streams
+           ORDER BY stream_id ASC
+           LIMIT $1 OFFSET $2`,
+          [limit, offset],
+        );
+        res.json({
+          data: result.rows,
+          pagination: { limit, offset, hasMore: result.rows.length === limit },
+        });
+      } catch {
+        res.status(500).json({ error: "Internal server error" });
+      }
+    },
+  );
+
+  app.get(
+    "/recurring-streams/:id/executions",
+    async (req: Request, res: Response): Promise<void> => {
+      const { id } = req.params;
+      if (!/^\d+$/.test(id)) {
+        res.status(400).json({ error: "Invalid recurring stream ID" });
+        return;
+      }
+      const pagination = parsePagination(
+        req.query.limit,
+        req.query.offset,
+        50,
+        200,
+      );
+      if (!pagination) {
+        res.status(400).json({ error: "Invalid pagination parameters" });
+        return;
+      }
+      const { limit, offset } = pagination;
+      try {
+        const stream = await pool.query(
+          "SELECT 1 FROM recurring_streams WHERE stream_id = $1",
+          [id],
+        );
+        if (stream.rows.length === 0) {
+          res.status(404).json({ error: "Recurring stream not found" });
+          return;
+        }
+        const result = await pool.query(
+          `SELECT * FROM recurring_stream_executions
+           WHERE stream_id = $1
+           ORDER BY executed_at_ledger DESC, event_id DESC
+           LIMIT $2 OFFSET $3`,
+          [id, limit, offset],
+        );
+        res.json({
+          data: result.rows,
+          pagination: { limit, offset, hasMore: result.rows.length === limit },
+        });
+      } catch {
+        res.status(500).json({ error: "Internal server error" });
+      }
+    },
+  );
+
+  app.get(
     "/streams/:id/spends",
     async (req: Request, res: Response): Promise<void> => {
       const { id } = req.params;

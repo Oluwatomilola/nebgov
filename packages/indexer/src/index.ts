@@ -19,6 +19,8 @@ dotenv.config();
 const GOVERNOR_ADDRESS = process.env.GOVERNOR_ADDRESS ?? "";
 const WRAPPER_ADDRESS = process.env.WRAPPER_ADDRESS ?? "";
 const TREASURY_ADDRESS = process.env.TREASURY_ADDRESS ?? "";
+const TREASURY_STREAMS_CONTRACT_ADDRESS =
+  process.env.TREASURY_STREAMS_CONTRACT_ADDRESS ?? "";
 const LIQUIDITY_ADDRESS = process.env.LIQUIDITY_ADDRESS ?? "";
 const CO_SPONSORSHIP_ADDRESS = process.env.CO_SPONSORSHIP_ADDRESS ?? "";
 const PROPOSAL_BONDS_ADDRESS = process.env.PROPOSAL_BONDS_ADDRESS ?? "";
@@ -43,6 +45,7 @@ export const INDEXED_CONTRACTS = {
   GOVERNOR_ADDRESS,
   WRAPPER_ADDRESS,
   TREASURY_ADDRESS,
+  TREASURY_STREAMS_CONTRACT_ADDRESS,
   LIQUIDITY_ADDRESS,
   CO_SPONSORSHIP_ADDRESS,
   PROPOSAL_BONDS_ADDRESS,
@@ -112,6 +115,7 @@ async function runIndexer(): Promise<void> {
     governorAddress: GOVERNOR_ADDRESS,
     wrapperAddress: WRAPPER_ADDRESS,
     treasuryAddress: TREASURY_ADDRESS,
+    treasuryStreamsContractAddress: TREASURY_STREAMS_CONTRACT_ADDRESS,
     liquidityAddress: LIQUIDITY_ADDRESS,
     coSponsorshipAddress: CO_SPONSORSHIP_ADDRESS,
     proposalBondsAddress: PROPOSAL_BONDS_ADDRESS,

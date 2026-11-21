@@ -53,6 +53,11 @@ const TOPIC_MAP: Record<string, string> = {
   stream_topped_up: "stream_topped_up",
   stream_exhausted: "stream_exhausted",
   stream_expired: "stream_expired",
+  StrmCreated: "StrmCreated",
+  StrmExec: "StrmExec",
+  StrmPaused: "StrmPaused",
+  StrmResumed: "StrmResumed",
+  StrmCancel: "StrmCancel",
 };
 
 export interface IndexerConfig {
@@ -60,6 +65,7 @@ export interface IndexerConfig {
   governorAddress: string;
   wrapperAddress?: string;
   treasuryAddress?: string;
+  treasuryStreamsContractAddress?: string;
   liquidityAddress?: string;
   coSponsorshipAddress?: string;
   proposalBondsAddress?: string;
@@ -98,6 +104,8 @@ export async function processEvents(
     const contractIds = [config.governorAddress].filter(Boolean);
     if (config.wrapperAddress) contractIds.push(config.wrapperAddress);
     if (config.treasuryAddress) contractIds.push(config.treasuryAddress);
+    if (config.treasuryStreamsContractAddress)
+      contractIds.push(config.treasuryStreamsContractAddress);
     if (config.liquidityAddress) contractIds.push(config.liquidityAddress);
     if (config.coSponsorshipAddress) contractIds.push(config.coSponsorshipAddress);
     if (config.proposalBondsAddress) contractIds.push(config.proposalBondsAddress);
@@ -137,6 +145,11 @@ export async function processEvents(
         contractId &&
         config.treasuryAddress &&
         contractId === config.treasuryAddress
+      );
+      const isRecurringTreasuryStreams = !!(
+        contractId &&
+        config.treasuryStreamsContractAddress &&
+        contractId === config.treasuryStreamsContractAddress
       );
       const isLiquidity = !!(
         contractId &&
@@ -195,7 +208,9 @@ export async function processEvents(
       }
 
       try {
-        if (isConvictionVoting) {
+        if (isRecurringTreasuryStreams) {
+          await handleRecurringStreamEvent(event, eventType, topics);
+        } else if (isConvictionVoting) {
           await handleConvictionEvent(event, eventType, topics);
         } else if (isTreasury) {
           switch (eventType) {
@@ -1194,6 +1209,130 @@ type TreasuryStreamEventType =
   | "stream_topped_up"
   | "stream_exhausted"
   | "stream_expired";
+
+type RecurringStreamEventType =
+  | "StrmCreated"
+  | "StrmExec"
+  | "StrmPaused"
+  | "StrmResumed"
+  | "StrmCancel";
+
+async function handleRecurringStreamEvent(
+  event: SorobanRpc.Api.EventResponse,
+  eventType: string,
+  topics: unknown[],
+): Promise<void> {
+  const streamId = String(topics[1] ?? "");
+  const eventData = scValToNative(event.value);
+  const data =
+    eventData && typeof eventData === "object" && !Array.isArray(eventData)
+      ? (eventData as Record<string, unknown>)
+      : {};
+  const eventName = eventType as RecurringStreamEventType;
+
+  if (!streamId || streamId === "undefined") {
+    throw new Error(`${eventType} is missing stream_id`);
+  }
+
+  switch (eventName) {
+    case "StrmCreated": {
+      const recipient = String(data.recipient ?? "");
+      if (!recipient || data.amount_per_interval === undefined ||
+          data.interval_ledgers === undefined) {
+        throw new Error("StrmCreated is missing required fields");
+      }
+      const amount = String(data.amount_per_interval);
+      const intervalLedgers = Number(data.interval_ledgers);
+      await pool.query(
+        `INSERT INTO recurring_streams
+           (stream_id, recipient, amount_per_interval, interval_ledgers,
+            created_ledger, paused, cancelled, total_streamed, execution_count,
+            updated_ledger)
+         VALUES ($1, $2, $3, $4, $5, FALSE, FALSE, 0, 0, $5)
+         ON CONFLICT (stream_id) DO NOTHING`,
+        [streamId, recipient, amount, intervalLedgers, event.ledger],
+      );
+      invalidatePattern("recurring-streams:");
+      broadcast({
+        type: "recurring_stream_created",
+        data: {
+          stream_id: streamId,
+          recipient,
+          amount_per_interval: amount,
+          interval_ledgers: intervalLedgers,
+          ledger: event.ledger,
+        },
+      });
+      break;
+    }
+    case "StrmExec": {
+      if (data.amount === undefined || data.executed_at_ledger === undefined) {
+        throw new Error("StrmExec is missing required fields");
+      }
+      const amount = String(data.amount);
+      const executedAtLedger = Number(data.executed_at_ledger);
+      const inserted = await pool.query(
+        `INSERT INTO recurring_stream_executions
+           (event_id, stream_id, amount, executed_at_ledger, ledger, transaction_hash)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (event_id) DO NOTHING
+         RETURNING event_id`,
+        [event.id, streamId, amount, executedAtLedger, event.ledger, event.txHash ?? null],
+      );
+      if (inserted.rowCount) {
+        await pool.query(
+          `UPDATE recurring_streams
+           SET total_streamed = total_streamed + $2,
+               last_executed_ledger = $3,
+               execution_count = execution_count + 1,
+               updated_ledger = $3
+           WHERE stream_id = $1`,
+          [streamId, amount, executedAtLedger],
+        );
+      }
+      invalidatePattern("recurring-streams:");
+      broadcast({
+        type: "recurring_stream_executed",
+        data: { stream_id: streamId, amount, executed_at_ledger: executedAtLedger },
+      });
+      break;
+    }
+    case "StrmPaused":
+    case "StrmResumed": {
+      const paused = eventName === "StrmPaused";
+      await pool.query(
+        `UPDATE recurring_streams
+         SET paused = $2, updated_ledger = $3
+         WHERE stream_id = $1`,
+        [streamId, paused, event.ledger],
+      );
+      invalidatePattern("recurring-streams:");
+      broadcast({
+        type: paused ? "recurring_stream_paused" : "recurring_stream_resumed",
+        data: { stream_id: streamId, ledger: event.ledger },
+      });
+      break;
+    }
+    case "StrmCancel": {
+      if (data.total_streamed === undefined) {
+        throw new Error("StrmCancel is missing total_streamed");
+      }
+      const totalStreamed = String(data.total_streamed);
+      await pool.query(
+        `UPDATE recurring_streams
+         SET cancelled = TRUE, total_streamed = $2, updated_ledger = $3
+         WHERE stream_id = $1`,
+        [streamId, totalStreamed, event.ledger],
+      );
+      invalidatePattern("recurring-streams:");
+      broadcast({
+        type: "recurring_stream_cancelled",
+        data: { stream_id: streamId, total_streamed: totalStreamed, ledger: event.ledger },
+      });
+      break;
+    }
+  }
+}
 
 function decodeTreasuryStreamEvent(
   event: SorobanRpc.Api.EventResponse,

@@ -80,7 +80,12 @@ export type WsEventType =
   | "vote_escrow_lock_created"
   | "vote_escrow_lock_increased"
   | "vote_escrow_lock_extended"
-  | "vote_escrow_lock_withdrawn";
+  | "vote_escrow_lock_withdrawn"
+  | "recurring_stream_created"
+  | "recurring_stream_executed"
+  | "recurring_stream_paused"
+  | "recurring_stream_resumed"
+  | "recurring_stream_cancelled";
 
 export interface WsEvent {
   type: WsEventType;
